@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jejak Geometri: Ular & Tangga</title>
+    <!-- Tailwind CSS for rapid styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SweetAlert2 for beautiful popups (replacing alert/confirm) -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- Phosphor Icons for UI elements -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap');
+
+        body {
+            font-family: 'Fredoka', sans-serif;
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            touch-action: manipulation; /* Improve touch response */
+        }
+
+        /* Glassmorphism styling for panels */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        }
+
+        /* Game Board Container */
+        #game-board-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px; /* Limit max size for desktop */
+            aspect-ratio: 1 / 1;
+            margin: 0 auto;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        /* The Grid */
+        #board {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            grid-template-rows: repeat(10, 1fr);
+            width: 100%;
+            height: 100%;
+            background-color: #fce4ec;
+            border: 4px solid #4a90e2;
+        }
+
+        /* Individual Cells */
+        .cell {
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 600;
+            font-size: clamp(0.7rem, 2vw, 1.2rem);
+            color: #333;
+            position: relative;
+            z-index: 1; /* Keep numbers below tokens */
+        }
+
+        /* Alternate colors for cells to create a checkerboard pattern */
+        .cell:nth-child(even) { background-color: rgba(255, 255, 255, 0.6); }
+        .cell:nth-child(odd) { background-color: rgba(135, 206, 235, 0.3); }
+
+        /* Highlight start and end */
+        .cell[data-index="1"] { background-color: #a7f3d0 !important; }
+        .cell[data-index="100"] { background-color: #fef08a !important; font-size: 1.5rem;}
+
+        /* Player Tokens */
+        .player-token {
+            width: 70%;
+            height: 70%;
+            border-radius: 50%;
+            position: absolute;
+            top: 15%;
+            left: 15%;
+            transition: all 0.5s ease-in-out;
+            z-index: 10;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.8rem;
+        }
+
+        #token-player {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border: 2px solid white;
+        }
+
+        #token-computer {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            border: 2px solid white;
+            /* Slightly offset to show both if on same tile */
+            transform: translate(15%, 15%); 
+        }
+
+        /* Snakes and Ladders Canvas overlay */
+        #sl-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Let clicks pass through to board */
+            z-index: 5; /* Between cells and tokens */
+        }
+
+        /* Dice Animation */
+        @keyframes roll {
+            0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
+            30% { transform: rotateX(120deg) rotateY(240deg) rotateZ(45deg); }
+            60% { transform: rotateX(240deg) rotateY(480deg) rotateZ(90deg); }
+            100% { transform: rotateX(360deg) rotateY(720deg) rotateZ(360deg); }
+        }
+
+        .rolling {
+            animation: roll 0.6s cubic-bezier(0.1, 0.7, 0.1, 1);
+        }
+
+        #dice-btn {
+            transition: transform 0.2s;
+        }
+        #dice-btn:active {
+            transform: scale(0.95);
+        }
+        #dice-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 640px) {
+            #board { border-width: 2px; }
+            .player-token { font-size: 0.6rem; }
+            .swal2-popup { font-size: 0.9rem !important; }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <main class="container mx-auto px-4 py-6 flex-grow flex flex-col items-center justify-start">
+        
+        <!-- Header Section -->
+        <header class="text-center mb-6 w-full max-w-3xl glass-panel p-4">
+            <h1 class="text-3xl md:text-4xl font-bold text-blue-700 mb-2 drop-shadow-sm flex items-center justify-center gap-2">
+                <i class="ph-fill ph-infinity"></i>
+                Jejak Geometri 
+            </h1>
+            <p class="text-sm md:text-base text-gray-600 font-medium">
+                Matematik Tahun 4: Perimeter & Luas<br>
+                <span class="text-xs font-normal">(Ular & Tangga Digital)</span>
+            </p>
+        </header>
+
+        <!-- Main Game Area: Board + Controls -->
+        <div class="flex flex-col lg:flex-row w-full max-w-6xl gap-6 items-center lg:items-start justify-center">
+            
+            <!-- Left Side: Game Board -->
+            <div class="w-full lg:w-2/3 max-w-[600px]">
+                <div id="game-board-container" class="bg-white p-1">
+                    <div id="board">
+                        <!-- Cells will be generated by JS -->
+                    </div>
+                    <!-- Canvas for drawing snakes and ladders -->
+                    <canvas id="sl-canvas"></canvas>
+                    
+                    <!-- Player Tokens -->
+                    <div id="token-player" class="player-token hidden"><i class="ph-fill ph-user"></i></div>
+                    <div id="token-computer" class="player-token hidden"><i class="ph-fill ph-robot"></i></div>
+                </div>
+            </div>
+
+            <!-- Right Side: Controls and Info -->
+            <div class="w-full lg:w-1/3 flex flex-col gap-4">
+                
+                <!-- Status Panel -->
+                <div class="glass-panel p-5 flex flex-col items-center w-full">
+                    <h2 class="text-xl font-bold text-gray-700 mb-4 border-b-2 border-blue-200 w-full text-center pb-2">Status Permainan</h2>
+                    
+                    <div class="flex justify-between w-full mb-4">
+                        <div class="flex flex-col items-center">
+                            <span class="text-xs uppercase text-gray-500 font-bold">Pemain (Biru)</span>
+                            <span id="player-pos-display" class="text-2xl font-bold text-blue-600">Mula</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-xs uppercase text-gray-500 font-bold">Lawan (Merah)</span>
+                            <span id="comp-pos-display" class="text-2xl font-bold text-red-600">Mula</span>
+                        </div>
+                    </div>
+
+                    <div id="turn-indicator" class="w-full py-2 px-4 rounded-lg text-center font-semibold text-white bg-blue-500 shadow-inner mb-4 transition-colors duration-300">
+                        Giliran Anda! Sila jawab soalan.
+                    </div>
+                </div>
+
+                <!-- Action Panel (Question & Dice) -->
+                <div class="glass-panel p-5 flex flex-col items-center justify-center min-h-[250px] w-full">
+                    
+                    <!-- Pre-roll Question State -->
+                    <div id="question-state" class="flex flex-col items-center w-full text-center">
+                        <i class="ph-duotone ph-chalkboard-teacher text-5xl text-purple-500 mb-2"></i>
+                        <h3 class="font-bold text-lg mb-2">Cabaran Matematik</h3>
+                        <p class="text-sm text-gray-600 mb-4">Jawab soalan dengan betul untuk membaling dadu!</p>
+                        <button id="btn-get-question" class="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transform transition hover:scale-105 w-full">
+                            Dapatkan Soalan
+                        </button>
+                    </div>
+
+                    <!-- Dice Roll State (Hidden initially) -->
+                    <div id="dice-state" class="hidden flex-col items-center w-full">
+                        <h3 class="font-bold text-lg mb-4 text-green-600">Jawapan Betul!</h3>
+                        
+                        <!-- Dice Visual -->
+                        <div id="dice-visual" class="w-24 h-24 bg-white rounded-2xl shadow-xl flex items-center justify-center mb-6 border-4 border-gray-100">
+                            <i id="dice-icon" class="ph-fill ph-dice-one text-6xl text-gray-800"></i>
+                        </div>
+                        
+                        <button id="dice-btn" class="bg-gradient-to-r from-green-400 to-blue-500 hover:from-green-500 hover:to-blue-600 text-white font-bold py-3 px-8 rounded-full shadow-lg text-lg flex items-center gap-2">
+                            <i class="ph-bold ph-arrows-clockwise"></i> Baling Dadu
+                        </button>
+                        <p id="dice-result-text" class="mt-4 font-bold text-xl text-gray-700 hidden"></p>
+                    </div>
+
+                </div>
+
+                <!-- Info Button -->
+                <button id="btn-info" class="self-end text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 mt-2">
+                    <i class="ph-fill ph-info"></i> Cara Bermain
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Template for Question (Handled by SweetAlert2, but keeping logic in JS) -->
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- GAME CONFIGURATION ---
+            const BOARD_SIZE = 10;
+            const TOTAL_CELLS = BOARD_SIZE * BOARD_SIZE;
+            
+            // Define Snakes (Start, End) - Start > End
+            const snakes = [
+                { start: 98, end: 28 },
+                { start: 92, end: 51 },
+                { start: 83, end: 19 },
+                { start: 69, end: 33 },
+                { start: 59, end: 17 },
+                { start: 48, end: 9 },
+                { start: 46, end: 5 },
+                { start: 38, end: 15 }
+            ];
+
+            // Define Ladders (Start, End) - Start < End
+            const ladders = [
+                { start: 8, end: 26 },
+                { start: 21, end: 82 },
+                { start: 43, end: 77 },
+                { start: 50, end: 91 },
+                { start: 54, end: 93 },
+                { start: 62, end: 96 },
+                { start: 66, end: 87 }
+            ];
+
+            // --- QUESTIONS DATABASE (Math Year 4: Area & Perimeter) ---
+            const questions = [
+                { q: "Sebuah segi empat sama mempunyai sisi 5 cm. Apakah luasnya? (Rumus: Panjang x Lebar)", options: ["10 cm persegi", "20 cm persegi", "25 cm persegi", "50 cm persegi"], a: "25 cm persegi" },
+                { q: "Perimeter sebuah segi empat sama ialah 20 cm. Berapakah panjang satu sisinya?", options: ["4 cm", "5 cm", "10 cm", "40 cm"], a: "5 cm" },
+                { q: "Panjang segi empat tepat ialah 8 cm dan lebarnya 3 cm. Kira perimeternya.", options: ["11 cm", "22 cm", "24 cm", "30 cm"], a: "22 cm" },
+                { q: "Luas sebuah padang berbentuk segi empat tepat ialah 50 meter persegi. Jika panjangnya 10 m, apakah lebarnya?", options: ["5 m", "10 m", "40 m", "60 m"], a: "5 m" },
+                { q: "Kira luas segi tiga bersudut tegak dengan tapak 6 cm dan tinggi 4 cm. (Rumus: 1/2 x tapak x tinggi)", options: ["10 cm persegi", "12 cm persegi", "24 cm persegi", "48 cm persegi"], a: "12 cm persegi" },
+                { q: "Sebuah segi tiga sama sisi mempunyai perimeter 27 cm. Berapakah panjang setiap sisinya?", options: ["3 cm", "6 cm", "9 cm", "27 cm"], a: "9 cm" },
+                { q: "Luas satu petak segi empat sama ialah 1 unit persegi. Jika sebuah bentuk dilukis meliputi 15 petak penuh, berapakah luas bentuk itu?", options: ["5 unit persegi", "10 unit persegi", "15 unit persegi", "30 unit persegi"], a: "15 unit persegi" },
+                { q: "Sebuah bilik bersaiz 4m panjang dan 5m lebar. Berapakah luas permaidani yang diperlukan untuk menutup lantai bilik itu?", options: ["9 m persegi", "18 m persegi", "20 m persegi", "40 m persegi"], a: "20 m persegi" },
+                { q: "Perimeter segi tiga sama kaki ialah 20 cm. Jika panjang dua sisi yang sama ialah 7 cm, berapakah panjang tapaknya?", options: ["6 cm", "7 cm", "13 cm", "14 cm"], a: "6 cm" },
+                { q: "Antara berikut, yang manakah rumus bagi luas segi empat?", options: ["Panjang + Lebar", "Panjang x Lebar", "2 x (Panjang + Lebar)", "1/2 x Panjang x Lebar"], a: "Panjang x Lebar" },
+                { q: "Berapakah luas segi empat sama dengan panjang sisi 8 unit?", options: ["16 unit persegi", "32 unit persegi", "64 unit persegi", "128 unit persegi"], a: "64 unit persegi" },
+                { q: "Satu pagar dibina mengelilingi taman berbentuk segi empat tepat (Panjang 12m, Lebar 5m). Kira panjang pagar tersebut.", options: ["17 m", "34 m", "60 m", "120 m"], a: "34 m" }
+            ];
+
+            // --- STATE VARIABLES ---
+            let playerPos = 0; // 0 means not on board yet
+            let compPos = 0;
+            let isPlayerTurn = true;
+            let cellsCoordinates = {}; // Store {x, y} for each cell index to draw canvas lines
+
+            // --- DOM ELEMENTS ---
+            const boardEl = document.getElementById('board');
+            const tokenPlayer = document.getElementById('token-player');
+            const tokenComp = document.getElementById('token-computer');
+            const canvas = document.getElementById('sl-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            const btnGetQuestion = document.getElementById('btn-get-question');
+            const questionState = document.getElementById('question-state');
+            const diceState = document.getElementById('dice-state');
+            const btnDice = document.getElementById('dice-btn');
+            const diceIcon = document.getElementById('dice-icon');
+            const diceResultText = document.getElementById('dice-result-text');
+            
+            const turnIndicator = document.getElementById('turn-indicator');
+            const playerPosDisplay = document.getElementById('player-pos-display');
+            const compPosDisplay = document.getElementById('comp-pos-display');
+            const btnInfo = document.getElementById('btn-info');
+
+            // --- STREAMING_CHUNK:Board Generation ---
+            function createBoard() {
+                boardEl.innerHTML = '';
+                // The board is 10x10. Bottom left is 1, top left is 100.
+                // It weaves back and forth (Boustrophedon pattern).
+                
+                let isLeftToRight = true;
+                let currentNum = TOTAL_CELLS; // Start from top row (100-91)
+
+                for (let row = 0; row < BOARD_SIZE; row++) {
+                    let rowCells = [];
+                    for (let col = 0; col < BOARD_SIZE; col++) {
+                        rowCells.push(currentNum);
+                        currentNum--;
+                    }
+                    
+                    // If row is odd index (meaning visually even row from top), reverse numbers
+                    if (!isLeftToRight) {
+                        rowCells.reverse();
+                    }
+
+                    // Create DOM elements
+                    rowCells.forEach(num => {
+                        const cell = document.createElement('div');
+                        cell.classList.add('cell');
+                        cell.id = `cell-${num}`;
+                        cell.dataset.index = num;
+                        cell.innerText = num;
+                        boardEl.appendChild(cell);
+                    });
+
+                    isLeftToRight = !isLeftToRight; // Toggle direction for next row
+                }
+                
+                // Set initial tokens visible at bottom left (roughly near 1) before they "enter"
+                tokenPlayer.classList.remove('hidden');
+                tokenComp.classList.remove('hidden');
+                updateTokenPosition(tokenPlayer, 1, true); // Move visually to 1 but state is 0
+                updateTokenPosition(tokenComp, 1, true);
+                
+                // Draw canvas elements after a slight delay to ensure DOM layout is settled
+                setTimeout(drawSnakesAndLadders, 500);
+            }
+
+            // --- STREAMING_CHUNK:Canvas Drawing (Snakes & Ladders) ---
+            function resizeCanvas() {
+                const container = document.getElementById('game-board-container');
+                canvas.width = container.clientWidth;
+                canvas.height = container.clientHeight;
+                calculateCellCoordinates();
+                drawSnakesAndLadders();
+            }
+
+            function calculateCellCoordinates() {
+                cellsCoordinates = {};
+                for (let i = 1; i <= TOTAL_CELLS; i++) {
+                    const cell = document.getElementById(`cell-${i}`);
+                    if(cell) {
+                        // Get coordinates relative to the board container
+                        const rect = cell.getBoundingClientRect();
+                        const containerRect = canvas.getBoundingClientRect();
+                        
+                        cellsCoordinates[i] = {
+                            x: rect.left - containerRect.left + (rect.width / 2),
+                            y: rect.top - containerRect.top + (rect.height / 2)
+                        };
+                    }
+                }
+            }
+
+            function drawSnakesAndLadders() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw Ladders (Greenish/Brownish)
+                ctx.lineWidth = 6;
+                ctx.strokeStyle = '#8B4513';
+                ctx.lineCap = 'round';
+                ladders.forEach(ladder => {
+                    const startPos = cellsCoordinates[ladder.start];
+                    const endPos = cellsCoordinates[ladder.end];
+                    if(startPos && endPos) {
+                        drawLadder(startPos.x, startPos.y, endPos.x, endPos.y);
+                    }
+                });
+
+                // Draw Snakes (Red/Greenish)
+                snakes.forEach(snake => {
+                    const startPos = cellsCoordinates[snake.start]; // Head
+                    const endPos = cellsCoordinates[snake.end];     // Tail
+                    if(startPos && endPos) {
+                        drawSnakeCurve(startPos.x, startPos.y, endPos.x, endPos.y);
+                    }
+                });
+            }
+
+            function drawLadder(x1, y1, x2, y2) {
+                // Main rails
+                ctx.beginPath();
+                ctx.moveTo(x1 - 10, y1);
+                ctx.lineTo(x2 - 10, y2);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(x1 + 10, y1);
+                ctx.lineTo(x2 + 10, y2);
+                ctx.stroke();
+
+                // Rungs
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+                const steps = Math.floor(distance / 20); // A rung every ~20px
+
+                for(let i=1; i<steps; i++) {
+                    const ratio = i / steps;
+                    const rungX = x1 + dx * ratio;
+                    const rungY = y1 + dy * ratio;
+                    
+                    ctx.beginPath();
+                    // Basic normal vector for rungs
+                    ctx.moveTo(rungX - 10, rungY);
+                    ctx.lineTo(rungX + 10, rungY);
+                    ctx.stroke();
+                }
+            }
+
+            function drawSnakeCurve(hx, hy, tx, ty) {
+                // Bezier curve to simulate snake body
+                const midX = (hx + tx) / 2;
+                const midY = (hy + ty) / 2;
+                
+                // Offset control point to make it curvy
+                const cp1x = midX + 50; 
+                const cp1y = hy;
+                const cp2x = midX - 50;
+                const cp2y = ty;
+
+                // Body
+                ctx.lineWidth = 10;
+                ctx.strokeStyle = 'rgba(239, 68, 68, 0.7)'; // Reddish body
+                ctx.beginPath();
+                ctx.moveTo(hx, hy);
+                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, tx, ty);
+                ctx.stroke();
+
+                // Head marker (simple circle for now)
+                ctx.fillStyle = '#dc2626'; // Darker red head
+                ctx.beginPath();
+                ctx.arc(hx, hy, 8, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+
+            // --- STREAMING_CHUNK:Game Logic & Interactions ---
+            
+            // Move token visually
+            function updateTokenPosition(tokenElement, cellIndex, isInitial = false) {
+                // Ensure index is within bounds for drawing
+                let targetIdx = cellIndex;
+                if (targetIdx < 1) targetIdx = 1;
+                if (targetIdx > 100) targetIdx = 100;
+
+                const cell = document.getElementById(`cell-${targetIdx}`);
+                if (cell) {
+                    // Using percentage based positioning relative to the grid
+                    // The board has position:relative, but cells are grid items.
+                    // Easier to append the token to the cell itself or calculate relative to board container.
+                    
+                    // Best method for animation: Move relative to board container using absolute positioning
+                    const boardRect = boardEl.getBoundingClientRect();
+                    const cellRect = cell.getBoundingClientRect();
+                    
+                    // Calculate left/top as percentage of board width/height to keep it responsive
+                    const leftPct = ((cellRect.left - boardRect.left) / boardRect.width) * 100;
+                    const topPct = ((cellRect.top - boardRect.top) / boardRect.height) * 100;
+
+                    // Assuming grid cells are 10% x 10%. 
+                    tokenElement.style.left = `${leftPct}%`;
+                    tokenElement.style.top = `${topPct}%`;
+                    // Token is sized relative to cell via CSS, but positioned relative to board container.
+                    // So we must change the CSS structure slightly in JS to allow absolute movement across the board.
+                    
+                    tokenElement.style.width = `${10 * 0.7}%`; // 70% of a 10% cell
+                    tokenElement.style.height = `${10 * 0.7}%`;
+                    
+                    // Add slight offsets so player and comp don't completely overlap perfectly
+                    let offsetLeft = 1.5; // percent
+                    let offsetTop = 1.5;
+                    
+                    if(tokenElement.id === 'token-computer') {
+                       offsetLeft = 4;
+                       offsetTop = 4;
+                    }
+
+                    tokenElement.style.transform = `translate(${offsetLeft}%, ${offsetTop}%)`;
+                }
+            }
+
+            function setTurn(isPlayer) {
+                isPlayerTurn = isPlayer;
+                if (isPlayer) {
+                    turnIndicator.className = "w-full py-2 px-4 rounded-lg text-center font-semibold text-white bg-blue-500 shadow-inner mb-4 transition-colors duration-300";
+                    turnIndicator.innerText = "Giliran Anda! Sila jawab soalan.";
+                    questionState.classList.remove('hidden');
+                    diceState.classList.add('hidden');
+                } else {
+                    turnIndicator.className = "w-full py-2 px-4 rounded-lg text-center font-semibold text-white bg-red-500 shadow-inner mb-4 transition-colors duration-300";
+                    turnIndicator.innerText = "Giliran Komputer. Sila tunggu...";
+                    questionState.classList.add('hidden');
+                    diceState.classList.add('hidden');
+                    setTimeout(computerTurn, 1500); // Delay for realism
+                }
+            }
+
+            // Shuffle array helper for question options
+            function shuffle(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            }
+
+            // --- STREAMING_CHUNK:Question & Answering ---
+            btnGetQuestion.addEventListener('click', () => {
+                // Select random question
+                const qObj = questions[Math.floor(Math.random() * questions.length)];
+                
+                // Prepare options HTML
+                let optionsHtml = '<div class="flex flex-col gap-3 mt-4">';
+                let shuffledOptions = [...qObj.options]; // Copy array to avoid mutating original
+                // We shuffle in JS then build HTML
+                // Wait, Swal has an input 'radio', let's build custom HTML for better styling
+                
+                shuffledOptions.forEach((opt, index) => {
+                    optionsHtml += `
+                        <label class="flex items-center p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:bg-purple-50 transition-colors">
+                            <input type="radio" name="swal-math-ans" value="${opt}" class="w-5 h-5 text-purple-600 focus:ring-purple-500 mr-3">
+                            <span class="text-gray-800 text-lg">${opt}</span>
+                        </label>
+                    `;
+                });
+                optionsHtml += '</div>';
+
+                Swal.fire({
+                    title: '<span class="text-2xl font-bold text-purple-700">Soalan Kuiz!</span>',
+                    html: `
+                        <p class="text-lg font-medium text-gray-700 mb-4">${qObj.q}</p>
+                        ${optionsHtml}
+                    `,
+                    icon: 'question',
+                    showCancelButton: false,
+                    confirmButtonText: 'Jawab & Baling Dadu',
+                    confirmButtonColor: '#8b5cf6', // purple-500
+                    allowOutsideClick: false,
+                    preConfirm: () => {
+                        const selected = document.querySelector('input[name="swal-math-ans"]:checked');
+                        if (!selected) {
+                            Swal.showValidationMessage('Sila pilih satu jawapan!');
+                            return false;
+                        }
+                        return selected.value;
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        const userAnswer = result.value;
+                        if (userAnswer === qObj.a) {
+                            // Correct!
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Tahniah!',
+                                text: 'Jawapan anda tepat. Anda boleh membaling dadu sekarang.',
+                                timer: 2000,
+                                showConfirmButton: false
+                            });
+                            
+                            // Switch UI to dice roll
+                            questionState.classList.add('hidden');
+                            diceState.classList.remove('hidden');
+                            diceState.classList.add('flex');
+                            diceResultText.classList.add('hidden');
+                            btnDice.disabled = false;
+
+                        } else {
+                            // Wrong
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Alamak!',
+                                text: `Jawapan kurang tepat. Jawapan sebenar ialah: ${qObj.a}`,
+                                confirmButtonText: 'Tamat Giliran',
+                                confirmButtonColor: '#ef4444' // red-500
+                            }).then(() => {
+                                // End turn, pass to computer
+                                setTurn(false);
+                            });
+                        }
+                    }
+                });
+            });
+
+
+            // --- STREAMING_CHUNK:Dice Rolling & Movement ---
+            const diceIcons = [
+                'ph-dice-one', 'ph-dice-two', 'ph-dice-three', 
+                'ph-dice-four', 'ph-dice-five', 'ph-dice-six'
+            ];
+
+            btnDice.addEventListener('click', () => {
+                if(!isPlayerTurn) return;
+                
+                btnDice.disabled = true;
+                diceIcon.classList.add('rolling');
+                
+                // Simulate rolling effect
+                let rollInterval = setInterval(() => {
+                    let tempRoll = Math.floor(Math.random() * 6);
+                    diceIcon.className = `ph-fill ${diceIcons[tempRoll]} text-6xl text-blue-600 rolling`;
+                }, 100);
+
+                setTimeout(() => {
+                    clearInterval(rollInterval);
+                    diceIcon.classList.remove('rolling');
+                    
+                    const roll = Math.floor(Math.random() * 6) + 1; // 1 to 6
+                    diceIcon.className = `ph-fill ${diceIcons[roll-1]} text-6xl text-green-600`;
+                    
+                    diceResultText.innerText = `Anda mendapat: ${roll}`;
+                    diceResultText.classList.remove('hidden');
+
+                    moveToken('player', roll);
+
+                }, 800);
+            });
+
+            function computerTurn() {
+                // Computer doesn't answer questions, just rolls automatically
+                Swal.fire({
+                    title: 'Giliran Komputer',
+                    text: 'Komputer sedang membaling dadu...',
+                    icon: 'info',
+                    timer: 1500,
+                    showConfirmButton: false,
+                    toast: true,
+                    position: 'top-end'
+                });
+
+                // Re-use dice UI visually for computer if wanted, or just skip to movement
+                // Let's use UI so player sees it
+                questionState.classList.add('hidden');
+                diceState.classList.remove('hidden');
+                diceState.classList.add('flex');
+                btnDice.classList.add('hidden'); // Hide button
+                diceResultText.classList.add('hidden');
+
+                diceIcon.classList.add('rolling');
+                
+                let rollInterval = setInterval(() => {
+                    let tempRoll = Math.floor(Math.random() * 6);
+                    diceIcon.className = `ph-fill ${diceIcons[tempRoll]} text-6xl text-red-600 rolling`;
+                }, 100);
+
+                setTimeout(() => {
+                    clearInterval(rollInterval);
+                    diceIcon.classList.remove('rolling');
+                    
+                    const roll = Math.floor(Math.random() * 6) + 1; 
+                    diceIcon.className = `ph-fill ${diceIcons[roll-1]} text-6xl text-red-600`;
+                    
+                    diceResultText.innerText = `Komputer mendapat: ${roll}`;
+                    diceResultText.classList.remove('hidden');
+                    
+                    setTimeout(() => {
+                        moveToken('computer', roll);
+                    }, 1000);
+
+                }, 1500);
+            }
+
+            function moveToken(type, steps) {
+                let currentPos = type === 'player' ? playerPos : compPos;
+                let targetPos = currentPos + steps;
+
+                // Win condition check
+                if (targetPos > 100) {
+                    // Bounce back rule
+                    const over = targetPos - 100;
+                    targetPos = 100 - over;
+                }
+
+                // Step-by-step visual animation
+                animateMovement(type, currentPos, targetPos, () => {
+                    // After reaching target, check for snake or ladder
+                    checkSnakeOrLadder(type, targetPos);
+                });
+            }
+
+            function animateMovement(type, start, end, callback) {
+                let current = start;
+                let tokenEl = type === 'player' ? tokenPlayer : tokenComp;
+                let increment = end > start ? 1 : -1; // Handle bouncing back
+                
+                const interval = setInterval(() => {
+                    if (current === end) {
+                        clearInterval(interval);
+                        // Update state
+                        if(type === 'player') {
+                            playerPos = current;
+                            playerPosDisplay.innerText = playerPos;
+                        } else {
+                            compPos = current;
+                            compPosDisplay.innerText = compPos;
+                        }
+                        callback(); // Continue to check snakes/ladders
+                        return;
+                    }
+                    current += increment;
+                    updateTokenPosition(tokenEl, current);
+                }, 300); // Move every 300ms
+            }
+
+            function checkSnakeOrLadder(type, pos) {
+                let finalPos = pos;
+                let isHit = false;
+                let message = "";
+                let title = "";
+                let iconType = "";
+
+                // Check Ladders
+                const ladder = ladders.find(l => l.start === pos);
+                if (ladder) {
+                    finalPos = ladder.end;
+                    isHit = true;
+                    title = "Naik Tangga!";
+                    message = "Hebat! Anda memanjat ke atas.";
+                    iconType = "success";
+                }
+
+                // Check Snakes
+                const snake = snakes.find(s => s.start === pos);
+                if (snake) {
+                    finalPos = snake.end;
+                    isHit = true;
+                    title = "Terkena Ular!";
+                    message = "Alamak, anda terpaksa turun ke bawah.";
+                    iconType = "warning";
+                }
+
+                if (isHit) {
+                    const tokenEl = type === 'player' ? tokenPlayer : tokenComp;
+                    
+                    if(type === 'player') {
+                        Swal.fire({ title: title, text: message, icon: iconType, timer: 2000, showConfirmButton: false });
+                    }
+                    
+                    setTimeout(() => {
+                        updateTokenPosition(tokenEl, finalPos); // Jump directly to final pos
+                        
+                        if(type === 'player') {
+                            playerPos = finalPos;
+                            playerPosDisplay.innerText = playerPos;
+                        } else {
+                            compPos = finalPos;
+                            compPosDisplay.innerText = compPos;
+                        }
+
+                        checkWinCondition(type, finalPos);
+                    }, 1000); // Wait a second before sliding up/down
+
+                } else {
+                    checkWinCondition(type, finalPos);
+                }
+            }
+
+            function checkWinCondition(type, pos) {
+                if (pos === 100) {
+                    if (type === 'player') {
+                        Swal.fire({
+                            title: 'TAHNIAH!',
+                            text: 'Anda telah menang permainan Jejak Geometri!',
+                            icon: 'success',
+                            confirmButtonText: 'Main Semula',
+                            backdrop: `rgba(0,0,123,0.4) url("https://media.giphy.com/media/26tOZ42Mg6pbTUPHW/giphy.gif") left top no-repeat`
+                        }).then(resetGame);
+                    } else {
+                        Swal.fire({
+                            title: 'TAMAT!',
+                            text: 'Komputer telah menang. Jangan putus asa, cuba lagi!',
+                            icon: 'error',
+                            confirmButtonText: 'Main Semula'
+                        }).then(resetGame);
+                    }
+                } else {
+                    // Switch Turn
+                    setTimeout(() => {
+                        // Reset UI for next turn
+                        btnDice.classList.remove('hidden');
+                        setTurn(type !== 'player'); 
+                    }, 1000);
+                }
+            }
+
+            function resetGame() {
+                playerPos = 0;
+                compPos = 0;
+                playerPosDisplay.innerText = "Mula";
+                compPosDisplay.innerText = "Mula";
+                updateTokenPosition(tokenPlayer, 1, true);
+                updateTokenPosition(tokenComp, 1, true);
+                setTurn(true); // Player starts
+            }
+
+            // --- STREAMING_CHUNK:Initialization and Events ---
+            btnInfo.addEventListener('click', () => {
+                Swal.fire({
+                    title: 'Cara Bermain',
+                    html: `
+                        <div class="text-left text-sm">
+                            <ul class="list-disc pl-5 space-y-2">
+                                <li>Pemain bersaing dengan Komputer untuk sampai ke petak 100.</li>
+                                <li>Pada giliran anda, klik <b>"Dapatkan Soalan"</b>.</li>
+                                <li>Jika anda menjawab soalan <i>Perimeter & Luas</i> dengan betul, anda dibenarkan membaling dadu.</li>
+                                <li>Jika salah, giliran anda tamat.</li>
+                                <li>Jika anda berhenti di pangkal tangga, anda akan naik.</li>
+                                <li>Jika anda berhenti di kepala ular, anda akan turun ke ekornya.</li>
+                            </ul>
+                        </div>
+                    `,
+                    icon: 'info',
+                    confirmButtonText: 'Faham!'
+                });
+            });
+
+            // Handle resize for canvas redraw
+            window.addEventListener('resize', () => {
+                resizeCanvas();
+                // Reposition tokens on resize to keep them aligned
+                updateTokenPosition(tokenPlayer, playerPos === 0 ? 1 : playerPos);
+                updateTokenPosition(tokenComp, compPos === 0 ? 1 : compPos);
+            });
+
+            // Start Setup
+            createBoard();
+            
+            // Allow CSS to apply, then measure canvas
+            setTimeout(() => {
+                resizeCanvas();
+            }, 100);
+
+            // Initial Info Popup
+            Swal.fire({
+                title: 'Selamat Datang!',
+                text: 'Mari uji pengetahuan Matematik (Perimeter & Luas) anda melalui permainan Ular & Tangga.',
+                icon: 'success',
+                confirmButtonText: 'Mula Bermain'
+            });
+
+        });
+    </script>
+</body>
+</html>
